@@ -44,6 +44,11 @@ output:
     + size of links and nodes is proportional to patient-encounter size
     
 ***
+```{r}
+#test plotting issue
+plot(1)
+```
+
 ```{r set, echo=FALSE, message=FALSE, warning=FALSE}
 package_list<-c("dplyr",
                 "tidyr",
