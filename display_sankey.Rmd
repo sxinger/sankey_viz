@@ -2,11 +2,12 @@
 title: "sankey diagram for visualizing clinical pathways for severe sepsis patients"
 author: "Xing Song"
 date: "August 8, 2018"
-output:
+output: 
   html_document: default
 ---
 
-##Instructions for reading the Sankey diagram:
+## Instructions for reading the Sankey diagram:
+
 * **Acronyms**:
     + SI: suspect infection onset
     + SIRS2: two SIRS onset
@@ -35,14 +36,14 @@ output:
     
 ***
 
-* **Hoveron text**:
+* **Tooltip Messages**:
     + if you hover over each node, you can see exactly how many patient-encounters have reached that state
     + if you hover over each link, you can see exactly how many patient-encounters have experienced that transition and the common time lapse for that transition
       ([t1, t2, t3] are corresponding to time at [25th percentile, 50th percentile, 75th percentile])
     + size of links and nodes is proportional to patient-encounter size
     
 ***
-```{r plot, echo=FALSE}
+```{r set, echo=FALSE, message=FALSE, warning=FALSE}
 package_list<-c("dplyr",
                 "tidyr",
                 "networkD3")
@@ -52,7 +53,10 @@ if(length(new_packages)>0){
 }
 library(dplyr)
 library(tidyr)
+```
 
+
+```{r echo=FALSE}
 #load data
 data("sankey_dat")
 
