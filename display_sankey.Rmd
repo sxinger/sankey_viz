@@ -1,0 +1,109 @@
+---
+title: "sankey diagram for visualizing clinical pathways for severe sepsis patients"
+author: "Xing Song"
+date: "August 8, 2018"
+output:
+  html_document: default
+---
+
+##Instructions for reading the Sankey diagram:
+* **Acronyms**:
+    + SI: suspect infection onset
+    + SIRS2: two SIRS onset
+    + OD1: first site of organ dysfunctio onset
+    + AC: abnormal coagulation
+    + KF: kidney failure
+    + IL: increased lactate
+    + AMS: altered mental status
+    + LF: liver failure
+    + BLOOD_C: first blood cultuer order
+    + ABX: first antibiotic administration
+    
+***
+
+* **Temporal indicator**:
+    + "@X" inidicates the relative temporal order of an event along an existing pathway
+    
+***
+  
+* **Color Codes**:
+    + pink: sepsis alerts
+    + blue: treatment bundle components
+    + green: a pathway with lower risk (empirical odd ration <= 1) to sepsis onset; the darker the green is the lower the risk is 
+    + red: a pathway with higher risk (empirical odd ratio > 1) to sepsis onset; the darker the green is the lower the risk is
+    + grey: a pathway lead to no sepsis within 48 hours since triage
+    
+***
+
+* **Hoveron text**:
+    + if you hover over each node, you can see exactly how many patient-encounters have reached that state
+    + if you hover over each link, you can see exactly how many patient-encounters have experienced that transition and the common time lapse for that transition
+      ([t1, t2, t3] are corresponding to time at [25th percentile, 50th percentile, 75th percentile])
+    + size of links and nodes is proportional to patient-encounter size
+    
+***
+```{r plot, echo=FALSE}
+package_list<-c("dplyr",
+                "tidyr",
+                "networkD3")
+new_packages<-package_list[!(package_list %in% installed.packages()[,"Package"])]
+if(length(new_packages)>0){
+  install.packages(new_packages) 
+}
+library(dplyr)
+library(tidyr)
+
+#load data
+data("sankey_dat")
+
+#customize link and node colors
+my_color<-'d3.scaleOrdinal() 
+           .domain(["sympt", "both", "treat","0","1","2","3","4"]) 
+           .range(["#ffd7ff", "#5fd7ff", "pink","#98d19e","#d1f2cc","#e57373","#ef5350","#f44346"])'
+
+#generate basic plot (not print)
+sn<-networkD3::sankeyNetwork(Links = sankey_dat$links,
+                             Nodes = sankey_dat$nodes,
+                             Source = "source",
+                             Target = "target",
+                             Value = "value",
+                             NodeID = "key",
+                             colourScale = my_color,
+                             LinkGroup = "group",
+                             NodeGroup = "group",
+                             fontSize= 15, nodeWidth = 30,
+                             width = 2000,height=1500)
+
+#add more info to links
+links_name<-sankey_dat$links %>%
+  inner_join(sankey_dat$nodes %>% dplyr::select(key) %>% mutate(code=1:n()-1),
+             by=c("source"="code")) %>%
+  dplyr::rename(source_name = key) %>%
+  inner_join(sankey_dat$nodes %>% dplyr::select(key) %>% mutate(code=1:n()-1),
+             by=c("target"="code")) %>%
+  dplyr::rename(target_name = key)
+
+#customize tooltip label
+sn$x$links$label<-paste(paste(links_name$source_name,links_name$target_name,sep="->"),
+                        paste0(sankey_dat$links$value,sankey_dat$links$label),sep="\n")
+htmlwidgets::onRender(
+  sn,
+  '
+  //user-defined label
+  function(el,x){
+  d3.selectAll(".link")
+  .select("title")
+  .text(function(d) { return d.label; });
+  
+  //move position of node text
+  d3.select(el)
+  .selectAll(".node text")
+  .attr("text-anchor","begin")
+  .attr("x",5)
+  }
+  '
+)
+```
+
+
+
