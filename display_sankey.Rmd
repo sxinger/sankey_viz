@@ -3,7 +3,8 @@ title: "sankey diagram for visualizing clinical pathways for severe sepsis patie
 author: "Xing Song"
 date: "August 8, 2018"
 output: 
-  html_document: default
+  html_document:
+    keep_md: true 
 ---
 
 ## Instructions for reading the Sankey diagram:
