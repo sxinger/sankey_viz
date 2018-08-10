@@ -4,7 +4,7 @@ author: "Xing Song"
 date: "August 8, 2018"
 output: 
   html_document:
-    keep_md: true 
+    keep_md: false 
 ---
 
 ## Instructions for reading the Sankey diagram:
@@ -44,11 +44,6 @@ output:
     + size of links and nodes is proportional to patient-encounter size
     
 ***
-```{r}
-#test plotting issue
-plot(1)
-```
-
 ```{r set, echo=FALSE, message=FALSE, warning=FALSE}
 package_list<-c("dplyr",
                 "tidyr",
