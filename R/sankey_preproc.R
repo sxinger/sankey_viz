@@ -2,23 +2,37 @@
 rm(list=ls())
 gc()
 
-setwd("E:/Sepsis Treatment FS PM")
-
 # trace(utils:::unpackPkgZip, edit=TRUE)
 # #Sys.sleep(2)
 
-# install.packages("plotly")
-install.packages("networkD3")
-library(dplyr)
-library(tidyr)
-library(magrittr)
-# library(plotly)
-library(networkD3)
+source("./R/util.R")
+require_libraries(c("networkD3",
+                    "tidyr",
+                    "dplyr",
+                    "magrittr",
+                    "leaflet"))
 
 #load data
-clinical_pathway<-read.csv("./data/clinical_pathways.csv",
-                           stringsAsFactors = F)
-load("./data/sepsis_target_trt3hr.Rdata")
+clinical_pathway<-readRDS("./data/alerts.rda")
+#--SIRS_X_Type
+#--SIRS_X_Date
+#--SIRS_X_Since_Triage
+#--OD_X_Type
+#--OD_X_Date
+#--OD_X_Since_Triage
+#--Sepsis_Onset
+#--Sepsis_Since_Triage
+
+trt3hr<-readRDS("./data/trt3hr.rda")
+#treatnebt table required elements:
+#--BLOOD_C (Hour_Since_Triage)
+#--ABX (Hour_Since_Triage)
+#--LAC1 (Hour_Since_Triage)
+#--BOLUS_TRIGGER (Hour_Since_Triage)
+#--TRIGGER TYPE 
+#--BOLUS_BEGIN (Hour_Since_Triage)
+#--BOLUS_END (Hour_Since_Triage)
+
 
 #summarize clinical pathway
 alt_pathway<-clinical_pathway %>%
@@ -82,6 +96,7 @@ trt_pathway<-trt3hr %>%
   gather(key,HOUR_SINCE_TRIAGE,-ENCOUNTER_NUM) %>%
   arrange(ENCOUNTER_NUM, HOUR_SINCE_TRIAGE) %>%
   mutate(alt_ind = 0)
+
 
 #blood/abx culture time adjustment
 trt_pathway %<>%
@@ -161,8 +176,8 @@ trt_alt %<>%
 
 
 #distinct nodes and links
-length(unique(trt_alt$key)) #267
-nrow(trt_alt %>% dplyr::select(key, key_next) %>% unique) #1615
+length(unique(trt_alt$key)) #233
+nrow(trt_alt %>% dplyr::select(key, key_next) %>% unique) #1382
 
 #initial event
 nrow(trt_alt %>% dplyr::select(key) %>% unique %>%
@@ -177,13 +192,13 @@ trt_alt %>% dplyr::select(key,ENCOUNTER_NUM) %>% unique %>%
 enc_clear_st<-trt_alt %>%
   filter(key %in% c( "SI@1"
                     ,"SIRS2@1"
-                    # ,"OD1_OD:Hypotension@1"
-                    # ,"OD1_OD:AMS@1"
-                    # ,"OD1_OD:AC@1"
-                    # ,"OD1_OD:KF@1"
-                    # ,"OD1_OD:Hypoxemia@1"
-                    # ,"OD1_OD:IL@1"
-                    # ,"OD1_OD:LF@1"
+                    ,"OD1_OD:Hypotension@1"
+                    ,"OD1_OD:AMS@1"
+                    ,"OD1_OD:AC@1"
+                    ,"OD1_OD:KF@1"
+                    ,"OD1_OD:Hypoxemia@1"
+                    ,"OD1_OD:IL@1"
+                    ,"OD1_OD:LF@1"
                     )) %>%
   dplyr::select(ENCOUNTER_NUM) %>%
   unique
@@ -191,8 +206,8 @@ enc_clear_st<-trt_alt %>%
 trt_alt %<>% semi_join(enc_clear_st, by="ENCOUNTER_NUM")
 
 #distinct nodes and links
-length(unique(trt_alt$key)) #135
-nrow(trt_alt %>% dplyr::select(key, key_next) %>% unique) #897
+length(unique(trt_alt$key)) #143
+nrow(trt_alt %>% dplyr::select(key, key_next) %>% unique) #983
 
 #initial event
 nrow(trt_alt %>% dplyr::select(key) %>% unique %>%
@@ -202,24 +217,47 @@ nrow(trt_alt %>% dplyr::select(key) %>% unique %>%
 path_cnt<-trt_alt %>% group_by(ENCOUNTER_NUM) %>%
   dplyr::summarize(pathways=paste0(key_next,collapse = "+")) %>%
   ungroup %>% unique
-length(unique(path_cnt$pathways))
+length(unique(path_cnt$pathways)) #2270
+
+pathway_dist<-path_cnt %>% group_by(pathways) %>%
+  dplyr::summarise(cnt=length(unique(ENCOUNTER_NUM))) %>%
+  ungroup
+
+path_cnt %<>%
+  semi_join(pathway_dist %>% dplyr::filter(cnt>=50),by="pathways")
+
+trt_alt %<>%
+  semi_join(path_cnt,by="ENCOUNTER_NUM")
 
 #encode the nodes and collect node and link summaries
-enc_nodes<-trt_alt %>% dplyr::select(ENCOUNTER_NUM,key,key_next,alt_ind) %>%
-  semi_join(outcome %>% filter(alt_ind==1),by = "ENCOUNTER_NUM") %>%
+enc_nodes<-trt_alt %>% 
+  dplyr::select(ENCOUNTER_NUM,key,key_next,alt_ind) %>%
+  left_join(outcome %>% 
+              dplyr::select(ENCOUNTER_NUM,alt_ind) %>%
+              dplyr::rename(sepsis_ind=alt_ind),
+            by = "ENCOUNTER_NUM") %>%
   group_by(ENCOUNTER_NUM) %>%
-  slice(1) %>% ungroup %>%
+  dplyr::slice(1:1) %>% ungroup %>%
   group_by(key,alt_ind) %>%
-  dplyr::summarize(enc_cnt = length(unique(ENCOUNTER_NUM))) %>%
+  dplyr::summarize(enc_cnt = length(unique(ENCOUNTER_NUM)),
+                   sepsis_cnt=length(unique(ENCOUNTER_NUM*sepsis_ind))-1) %>%
   ungroup %>% arrange(desc(enc_cnt)) %>%
-  bind_rows(trt_alt %>% dplyr::select(ENCOUNTER_NUM,key_next,alt_ind_next) %>%
+  dplyr::mutate(sepsis_prop_node=round(sepsis_cnt/enc_cnt,4)) %>%
+  bind_rows(trt_alt %>% 
+              dplyr::select(ENCOUNTER_NUM,key_next,alt_ind_next) %>%
+              left_join(outcome %>%
+                          dplyr::select(ENCOUNTER_NUM,alt_ind) %>%
+                          dplyr::rename(sepsis_ind=alt_ind),
+                        by = "ENCOUNTER_NUM") %>%
               group_by(ENCOUNTER_NUM) %>%
               dplyr::mutate(event_ord = 1:n()) %>% 
               ungroup %>% arrange(event_ord) %>%
               group_by(event_ord,key_next,alt_ind_next) %>%
-              dplyr::summarize(enc_cnt = length(unique(ENCOUNTER_NUM))) %>%
+              dplyr::summarize(enc_cnt = length(unique(ENCOUNTER_NUM)),
+                               sepsis_cnt=length(unique(ENCOUNTER_NUM*sepsis_ind))-1) %>%
               arrange(desc(enc_cnt)) %>% ungroup %>%
-              dplyr::select(key_next,alt_ind_next,enc_cnt) %>% 
+              dplyr::mutate(sepsis_prop_node=round(sepsis_cnt/enc_cnt,4)) %>%
+              dplyr::select(key_next,alt_ind_next,enc_cnt,sepsis_cnt,sepsis_prop_node) %>% 
               dplyr::rename(key=key_next,
                             alt_ind=alt_ind_next) %>%
               unique) %>%
@@ -230,23 +268,27 @@ enc_nodes<-trt_alt %>% dplyr::select(ENCOUNTER_NUM,key,key_next,alt_ind) %>%
                                    (!grepl("0",alt_ind))&grepl("1",alt_ind) ~ "sympt")) %>%
   dplyr::mutate(group=as.factor(node_grp))
 
-enc_links<-trt_alt %>% dplyr::select(ENCOUNTER_NUM,key,key_next) %>%
+enc_links<-trt_alt %>% 
+  dplyr::select(ENCOUNTER_NUM,key,key_next) %>%
+  left_join(outcome %>%
+              dplyr::select(ENCOUNTER_NUM,alt_ind) %>%
+              dplyr::rename(sepsis_ind=alt_ind),
+            by = "ENCOUNTER_NUM") %>%
   group_by(key,key_next) %>%
-  dplyr::summarize(enc_cnt = length(unique(ENCOUNTER_NUM))) %>%
-  ungroup
+  dplyr::summarize(enc_cnt = length(unique(ENCOUNTER_NUM)),
+                   sepsis_cnt=length(unique(ENCOUNTER_NUM*sepsis_ind))-1) %>%
+  ungroup %>%
+  dplyr::mutate(sepsis_prop_link=round(sepsis_cnt/enc_cnt,4))
 
 trt_alt %<>%
-  left_join(enc_nodes %>% dplyr::select(-alt_ind,-enc_cnt),
+  left_join(enc_nodes %>% dplyr::select(-alt_ind),
             by="key") %>%
   dplyr::rename(source=key_cd) %>%
-  left_join(enc_nodes %>% dplyr::select(-alt_ind,-enc_cnt),
+  left_join(enc_nodes %>% dplyr::select(-alt_ind),
             by=c("key_next"="key")) %>%
   dplyr::rename(target=key_cd) %>%
   left_join(enc_links,by=c("key","key_next")) %>%
-  dplyr::rename(value=enc_cnt) %>%
-  inner_join(outcome %>% dplyr::select(ENCOUNTER_NUM,alt_ind) %>%
-               dplyr::rename(sepsis_ind=alt_ind),
-             by = "ENCOUNTER_NUM")
+  dplyr::rename(value=enc_cnt)
   
 trt_alt_summ<-trt_alt %>% 
   group_by(source,target,value) %>%
@@ -254,25 +296,27 @@ trt_alt_summ<-trt_alt %>%
   dplyr::summarize(time_lapse_q1=round(quantile(time_lapse,probs=0.25,na.rm=T),2),
                    time_lapse_med=round(median(time_lapse,na.rm=T),2),
                    time_lapse_q3=round(quantile(time_lapse,probs=0.75,na.rm=T),2),
-                   sepsis_prop=round(mean(sepsis_ind),2)) %>%
+                   sepsis_oddsrt=round(mean((sepsis_prop_link/(1-sepsis_prop_link))/(sepsis_prop_node.x/(1-sepsis_prop_node.x))),2)) %>%
   ungroup %>% unique %>%
+  dplyr::mutate(sepsis_oddsrt=ifelse(is.nan(sepsis_oddsrt),0,sepsis_oddsrt)) %>%
   dplyr::mutate(link_grp=case_when(round(time_lapse_med)==0 ~ 0,
                                    round(time_lapse_med)>0&round(time_lapse_med)<=2 ~ 1,
                                    round(time_lapse_med)>2&round(time_lapse_med)<=5 ~ 2,
                                    round(time_lapse_med)>5&round(time_lapse_med)<=24 ~ 3,
                                    round(time_lapse_med)>24 ~ 4),
-                link_grp2=case_when(sepsis_prop>0&sepsis_prop<=0.25 ~ 0,
-                                    sepsis_prop>0.25&sepsis_prop<=0.5 ~ 1,
-                                    sepsis_prop>0.5&sepsis_prop<=0.75 ~ 2,
-                                    sepsis_prop>0.5&sepsis_prop<=0.90 ~ 3,
-                                    sepsis_prop>0.90 ~ 4)) %>%
+                link_grp2=case_when(sepsis_oddsrt>=0&sepsis_oddsrt<=0.5 ~ 0,
+                                    sepsis_oddsrt>0.5&sepsis_oddsrt<=1 ~ 1,
+                                    sepsis_oddsrt>1&sepsis_oddsrt<=2 ~ 2,
+                                    sepsis_oddsrt>2&sepsis_oddsrt<=4 ~ 3,
+                                    sepsis_oddsrt>4&sepsis_oddsrt<=10 ~ 4,
+                                    sepsis_oddsrt>10 ~ 5)) %>%
   dplyr::mutate(group=as.factor(link_grp2)) %>%
-  dplyr::mutate(label=paste0("[",time_lapse_q1,",",time_lapse_med,",",time_lapse_q3,"]"))
+  dplyr::mutate(label=paste0("[",time_lapse_q1,",",time_lapse_med,",",time_lapse_q3,"](",sepsis_oddsrt,")"))
   # dplyr::mutate(label=paste0(time_lapse_med,"hr"))
 
 
 #shrink the size
-incld<-40
+incld<-100
 # incld<-length(unique(trt_alt$key))+1
 nodes_restr<-enc_nodes %>% dplyr::filter(key_cd <= incld)
 links_restr<-trt_alt_summ %>% dplyr::filter(source <= incld & target <= incld)
@@ -281,11 +325,16 @@ links_restr<-trt_alt_summ %>% dplyr::filter(source <= incld & target <= incld)
 nodes<-as.data.frame(nodes_restr %>%
                        dplyr::select(key,group))
 links<-as.data.frame(links_restr %>%
-                       dplyr::select(source,target,value,group))
+                       dplyr::select(source,target,value,group,label))
+
+sankey_dat<-list(links=links,
+                 nodes=nodes)
+saveRDS(sankey_dat,file="./data/sankey_dat.rda")
+
 
 #give a color for each group
 unique_color<-unique(c(enc_nodes$node_grp,trt_alt_summ$link_grp))
-my_color<-'d3.scaleOrdinal() .domain(["sympt", "both", "treat","0","1","2","3","4"]) .range(["#ffd7ff", "#5fd7ff", "pink","#98d19e","#d1f2cc","#e57373","#ef5350","#f44346"])'
+my_color<-'d3.scaleOrdinal() .domain(["sympt","both","0","1","2","3","4","5"]) .range(["#ffd7ff", "#5fd7ff","#4eaa5f","#99db7f","#f1ff75","#f9956d","#f77676,"#e04e4e"])'
 
 sankeyNetwork(Links = links, Nodes = nodes,
               Source = "source", Target = "target",
@@ -296,105 +345,5 @@ sankeyNetwork(Links = links, Nodes = nodes,
               fontSize= 28, fontFamily = "sans-serif",
               nodeWidth = 30,
               width = 2000,height=800)
-
-
-
-#sample codes for sankey plot
-trace(utils:::unpackPkgZip, edit=TRUE)
-#Sys.sleep(2)
-
-install.packages("rjson")
-library(rjson)
-json_file <- "https://raw.githubusercontent.com/plotly/plotly.js/master/test/image/mocks/sankey_energy.json"
-json_data <-fromJSON(paste(readLines(json_file), collapse=""))
-
-p <- plot_ly(
-  type = "sankey",
-  domain = c(
-    x =  c(0,1),
-    y =  c(0,1)
-  ),
-  orientation = "h",
-  valueformat = ".0f",
-  valuesuffix = "TWh",
-  
-  node = list(
-    label = json_data$data[[1]]$node$label,
-    color = json_data$data[[1]]$node$color,
-    pad = 15,
-    thickness = 15,
-    line = list(
-      color = "black",
-      width = 0.5
-    )
-  ),
-  
-  link = list(
-    source = json_data$data[[1]]$link$source,
-    target = json_data$data[[1]]$link$target,
-    value =  json_data$data[[1]]$link$value,
-    label =  json_data$data[[1]]$link$label
-  )
-) %>% 
-  layout(
-    title = "Energy forecast for 2050<br>Source: Department of Energy & Climate Change, Tom Counsell via <a href='https://bost.ocks.org/mike/sankey/'>Mike Bostock</a>",
-    font = list(
-      size = 10
-    ),
-    xaxis = list(showgrid = F, zeroline = F),
-    yaxis = list(showgrid = F, zeroline = F)
-  )
-p
-#not work!
-
-
-#collect info for sankey nodes --plotly implementation
-p <- plot_ly(
-  type = "sankey",
-  domain = c(
-    x =  c(0,1),
-    y =  c(0,1)
-  ),
-  orientation = "h",
-  valueformat = ".0f",
-  valuesuffix = "TWh",
-  
-  node = list(
-    label = enc_nodes$key_cd,
-    color =  "blue",
-    pad = 15,
-    thickness = 15,
-    line = list(
-      color = "black",
-      width = 0.5
-    )
-  ),
-  
-  link = list(
-    source = trt_alt_summ$source,
-    target = trt_alt_summ$target,
-    value =  trt_alt_summ$target_enc,
-    label =  trt_alt_summ$label
-  )
-) %>% 
-  layout(
-    title = "Sepsis Alert and 3-hour Bundle Trajectory",
-    font = list(
-      size = 10
-    ),
-    xaxis = list(showgrid = F,zeroline = F,showline=F,showticklabels=F),
-    yaxis = list(showgrid = F,zeroline = F,showline=F,showticklabels=F)
-  )
-
-p
-
-# publish online
-# https://plot.ly/r/getting-started
-
-Sys.setenv("plotly_username"="sxinger")
-Sys.setenv("plotly_api_key"="RjoEMXjqPXE3sY1llsR9")
-
-chart_link = api_create(p,filename = "sankey_sepsis_process3",fileopt = "overwrite")
-chart_link
 
 

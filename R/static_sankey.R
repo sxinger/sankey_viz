@@ -2,24 +2,20 @@
 rm(list=ls())
 gc()
 
-#install packages
-package_list<-c("dplyr",
-                "tidyr",
-                "networkD3")
-new_packages<-package_list[!(package_list %in% installed.packages()[,"Package"])]
-if(length(new_packages)>0){
-  install.packages(new_packages) 
-}
-library(dplyr)
-library(tidyr)
+source("./R/util.R")
+require_libraries(c("networkD3",
+                    "tidyr",
+                    "dplyr",
+                    "magrittr"))
 
 #load data
-data("sankey_dat")
+sankey_dat<-readRDS("./data/sankey_dat.rda")
 
 #customize link and node colors
 my_color<-'d3.scaleOrdinal() 
-           .domain(["sympt", "both", "treat","0","1","2","3","4"]) 
-           .range(["#ffd7ff", "#5fd7ff", "pink","#98d19e","#d1f2cc","#e57373","#ef5350","#f44346"])'
+          .domain(["sympt","both","0","1","2","3","4","5"]) 
+          .range(["#ffd7ff", "#5fd7ff","#4eaa5f","#99db7f","#f1ff75","#f9956d","#f77676","#e04e4e"])'
+
 
 #generate basic plot (not print)
 sn<-networkD3::sankeyNetwork(Links = sankey_dat$links,
@@ -45,7 +41,7 @@ links_name<-sankey_dat$links %>%
 
 #customize tooltip label
 sn$x$links$label<-paste(paste(links_name$source_name,links_name$target_name,sep="->"),
-                        paste0(sankey_dat$links$value,sankey_dat$links$label),sep="\n")
+                        paste(sankey_dat$links$value,sankey_dat$links$label),sep="\n")
 htmlwidgets::onRender(
   sn,
   '

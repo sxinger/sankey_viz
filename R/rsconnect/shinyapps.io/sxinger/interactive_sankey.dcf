@@ -1,0 +1,13 @@
+name: interactive_sankey
+title: interactive_sankey
+username:
+account: sxinger
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 398034
+bundleId: 1962557
+url: https://sxinger.shinyapps.io/interactive_sankey/
+when: 1553499519.49502
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: interactive_sankey.R|sankey_preproc.R|static_sankey.R|util.R

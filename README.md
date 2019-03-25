@@ -65,4 +65,7 @@ Click here to see the [interactive view] of the sankey diagram
 * The sequence of timestamped entries comprising both sepsis alerts and treatment components    
 * -- e.g. `SIRS2@1--BLOOD_C@2--LAC1@3` means 2 SIRS occurred first, followed by blood culture and initial lactate, where `@X` refers to relative temporal order    
 * -- 2,538 distinct non-trivial event traces were identified 
+* -- `./R/sankey_preproc.R` is used to aggregate and extract event traces
+* -- `./display_sankey.Rmd` creates the static sankey diagram with more informative tooltip message
+* -- `./R/interative_sankey.R` creates the interactive sankey diagram via Shiny App (bug)
 

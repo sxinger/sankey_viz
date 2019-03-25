@@ -1,0 +1,10 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/411444/30a958538b9f494584c404c26d045bc4
+bundleId: https://api.rpubs.com/api/v1/document/411444/30a958538b9f494584c404c26d045bc4
+url: http://rpubs.com/sxinger/411444
+when: 1553499143.00459
